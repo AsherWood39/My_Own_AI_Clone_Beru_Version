@@ -51,7 +51,7 @@ def setup_rag_pipeline():
 
     # Check if FAISS index already exists to avoid re-downloading/re-processing
     if os.path.exists(vectorstore_path):
-        st.info("Loading existing FAISS index...")
+        # Removed: st.info("Loading existing FAISS index...") # Removed this line as requested
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2") # Embeddings needed for loading
         vectorstore = FAISS.load_local(vectorstore_path, embeddings, allow_dangerous_deserialization=True)
         st.sidebar.success("RAG pipeline setup complete: FAISS index loaded.")
@@ -118,7 +118,7 @@ def get_groq_response(prompt_text):
             messages=[
                 {"role": "user", "content": prompt_text},
             ],
-            model="llama3-8b-8192",
+            model="llama3-8b-8192", # Use a valid Groq model name, e.g., "llama3-8b-8192" or "mixtral-8x7b-32768"
             temperature=0.7,
             max_tokens=64, # Further reduced max_tokens to encourage even shorter responses
         )
@@ -151,7 +151,7 @@ st.markdown(
         justify-content: flex-end;
     }
     .stChatMessage[data-testid="stChatMessage"]:has([data-testid="stMarkdownContainer"]:not([data-testId="stUserChatMessage"])) [data-testid="stChatMessageContent"] {
-        background-color: #e0f7fa; /* Light blue background for user messages */
+        color: #ffffff; /* White text for user messages */
         border-radius: 10px;
         padding: 10px;
     }
@@ -166,7 +166,7 @@ st.markdown(
         justify-content: flex-start;
     }
     .stChatMessage[data-testid="stChatMessage"]:has([data-testId="stUserChatMessage"]) [data-testid="stChatMessageContent"] {
-        background-color: #f0f0f0; /* Light gray background for assistant messages */
+        color: #ffffff; /* White text for assistant messages */
         border-radius: 10px;
         padding: 10px;
     }
