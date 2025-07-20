@@ -27,16 +27,16 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 arize_client = None # Initialize to None
 arize_client_initialized = False
 if not ARIZE_SPACE_KEY or not ARIZE_API_KEY:
-    st.warning("ARIZE_SPACE_KEY or ARIZE_API_KEY not found. Arize logging will be skipped.")
+    st.sidebar.warning("ARIZE_SPACE_KEY or ARIZE_API_KEY not found. Arize logging will be skipped.")
 else:
     try:
         # Instantiate Client. This is the correct way to get the client object
         # that contains the logging methods.
         arize_client = Client(space_key=ARIZE_SPACE_KEY, api_key=ARIZE_API_KEY)
         arize_client_initialized = True
-        st.success("Arize AI client initialized successfully!")
+        st.sidebar.success("Arize AI client initialized successfully!") # Moved to sidebar
     except Exception as e:
-        st.error(f"Failed to initialize Arize AI client: {e}")
+        st.sidebar.error(f"Failed to initialize Arize AI client: {e}") # Moved to sidebar
 
 # --- RAG Setup (from script.py) ---
 @st.cache_resource # Cache the resource to avoid re-loading on every rerun
@@ -58,7 +58,7 @@ def setup_rag_pipeline():
         # This will create/load a local ChromaDB instance in './chroma_db'
         vectorstore = Chroma.from_documents(chunks, embeddings, persist_directory="./chroma_db")
         vectorstore.persist() # Save the database to disk (important for persistence)
-        st.success("RAG pipeline setup complete: Documents loaded and vectorized.")
+        st.sidebar.success("RAG pipeline setup complete: Documents loaded and vectorized.") # Moved to sidebar
         return vectorstore, embeddings
     except FileNotFoundError:
         st.error("Error: 'data/reference.pdf' not found. Please ensure your Solo Leveling knowledge base PDF is in the 'data/' directory.")
@@ -107,8 +107,30 @@ def get_groq_response(prompt_text):
         return "My Liege, I encountered an error in communication. My apologies."
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="GenAI RAG Chatbot (Beru Edition)")
+# Configure page layout and sidebar behavior
+st.set_page_config(
+    page_title="GenAI RAG Chatbot (Beru Edition)",
+    layout="centered", # Can be "wide" or "centered"
+    initial_sidebar_state="collapsed" # Makes sidebar collapsed by default
+)
 st.title("GenAI RAG Chatbot: Beru's Wisdom")
+
+# Custom CSS for grayscale icons and potentially other styling
+st.markdown(
+    """
+    <style>
+    /* Target chat message avatars and apply grayscale filter */
+    .stChatMessage [data-testid="stChatMessageAvatar"] img {
+        filter: grayscale(100%);
+    }
+    /* Optional: Adjust user message alignment if needed, though Streamlit handles this */
+    /* .stChatMessage.st-emotion-cache-xyz-user-message {
+        align-self: flex-end;
+    } */
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -116,6 +138,7 @@ if "messages" not in st.session_state:
 
 # Display chat messages from history
 for message in st.session_state.messages:
+    # Streamlit's st.chat_message automatically aligns user (right) and assistant (left)
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
