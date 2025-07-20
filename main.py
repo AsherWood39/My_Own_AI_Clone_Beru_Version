@@ -8,9 +8,12 @@ from langchain_community.vectorstores import FAISS # Changed from Chroma to FAIS
 from arize.api import Client # Import Client from arize.api
 from arize.utils.types import ModelTypes, Environments # Import necessary types for logging
 from langchain.docstore.document import Document # Import Document for creating LangChain docs
-import requests # For fetching file from URL
-import io # For handling file-like objects in memory
-from pypdf import PdfReader # For reading PDF content from bytes
+from langchain_community.document_loaders import PyPDFLoader # Re-added for local PDF loading
+# Removed: import requests # No longer directly used for PDF loading, but may be used elsewhere
+# Removed: import io # No longer directly used for PDF loading from URL
+# Removed: from pypdf import PdfReader # No longer directly used for PDF loading from URL
+
+# --- FIX for ChromaDB sqlite3 issue is REMOVED as we are now using FAISS ---
 
 # Load environment variables from .env file
 load_dotenv()
@@ -55,31 +58,16 @@ def setup_rag_pipeline():
         return vectorstore, embeddings
     else:
         try:
-            # --- Solo Leveling PDF from Google Drive URL ---
-            # IMPORTANT: Replace 'YOUR_SOLO_LEVELING_PDF_FILE_ID' with your actual Google Drive File ID.
-            # Ensure the file is shared publicly or accessible via a link.
-            # Example: If your share link is https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ/view?usp=sharing
-            # Then the ID is 1aBcDeFgHiJkLmNoPqRsTuVwXyZ
-            solo_leveling_pdf_file_id = "YOUR_SOLO_LEVELING_PDF_FILE_ID" # <--- REPLACE THIS WITH YOUR FILE ID
-            file_url = f"https://drive.google.com/uc?export=download&id={solo_leveling_pdf_file_id}"
+            # --- Solo Leveling PDF from Local File ---
+            # Ensure 'data/reference.pdf' exists in your project directory
+            pdf_path = "data/reference.pdf"
+            st.info(f"Attempting to load PDF from: {pdf_path}")
 
-            st.info(f"Attempting to download PDF from: {file_url}")
-            response = requests.get(file_url)
-            response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
-
-            file_data = io.BytesIO(response.content)
-
-            # Use pypdf to read the PDF from bytes and extract text
-            pdf_reader = PdfReader(file_data)
-            raw_text = ''
-            for i, page in enumerate(pdf_reader.pages):
-                text = page.extract_text()
-                if text:
-                    raw_text += text + "\n"
+            # Use PyPDFLoader for local PDF files
+            loader = PyPDFLoader(pdf_path)
+            documents = loader.load()
+            st.info(f"Loaded {len(documents)} pages from the PDF.")
             
-            # Create a single LangChain Document object from the extracted text
-            documents = [Document(page_content=raw_text, metadata={"source": "Solo Leveling Manhwa"})]
-
             # Split documents
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             chunks = text_splitter.split_documents(documents)
@@ -93,11 +81,8 @@ def setup_rag_pipeline():
             vectorstore.save_local(vectorstore_path) # Save the FAISS index to disk
             st.sidebar.success("RAG pipeline setup complete: Documents loaded, vectorized, and FAISS index saved.")
             return vectorstore, embeddings
-        except requests.exceptions.HTTPError as e:
-            st.error(f"HTTP Error downloading PDF: {e}. Please check the file ID and sharing settings.")
-            st.stop()
-        except requests.exceptions.ConnectionError as e:
-            st.error(f"Connection Error downloading PDF: {e}. Check your internet connection.")
+        except FileNotFoundError:
+            st.error(f"Error: '{pdf_path}' not found. Please ensure your Solo Leveling knowledge base PDF is in the 'data/' directory.")
             st.stop()
         except Exception as e:
             st.error(f"Error setting up RAG pipeline: {e}")
@@ -133,7 +118,7 @@ def get_groq_response(prompt_text):
             messages=[
                 {"role": "user", "content": prompt_text},
             ],
-            model="llama3-8b-8192", # Use a valid Groq model name, e.g., "llama3-8b-8192" or "mixtral-8x7b-32768"
+            model="llama3.2:1b",
             temperature=0.7,
             max_tokens=64, # Further reduced max_tokens to encourage even shorter responses
         )
