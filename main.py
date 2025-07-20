@@ -8,6 +8,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from arize.api import Client # Import Client from arize.api
 from arize.utils.types import ModelTypes, Environments # Import necessary types for logging
+from chromadb.config import Settings
 
 # Load environment variables from .env file
 load_dotenv()
@@ -56,7 +57,15 @@ def setup_rag_pipeline():
 
         # Create/Load ChromaDB instance
         # This will create/load a local ChromaDB instance in './chroma_db'
-        vectorstore = Chroma.from_documents(chunks, embeddings, persist_directory="./chroma_db")
+        vectorstore = Chroma.from_documents(
+            chunks,
+            embeddings,
+            persist_directory="./chroma_db",
+            client_settings=Settings(
+                chroma_db_impl="duckdb+parquet",
+                persist_directory="./chroma_db"
+            )
+        )
         vectorstore.persist() # Save the database to disk (important for persistence)
         st.sidebar.success("RAG pipeline setup complete: Documents loaded and vectorized.") # Moved to sidebar
         return vectorstore, embeddings
