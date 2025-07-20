@@ -2,13 +2,15 @@ import streamlit as st
 from dotenv import load_dotenv
 import os
 from groq import Groq # Import the Groq client
-from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS # Changed from Chroma to FAISS
 from arize.api import Client # Import Client from arize.api
 from arize.utils.types import ModelTypes, Environments # Import necessary types for logging
-from chromadb.config import Settings
+from langchain.docstore.document import Document # Import Document for creating LangChain docs
+import requests # For fetching file from URL
+import io # For handling file-like objects in memory
+from pypdf import PdfReader # For reading PDF content from bytes
 
 # Load environment variables from .env file
 load_dotenv()
@@ -39,42 +41,67 @@ else:
     except Exception as e:
         st.sidebar.error(f"Failed to initialize Arize AI client: {e}") # Moved to sidebar
 
-# --- RAG Setup (from script.py) ---
+# --- RAG Setup (using FAISS) ---
 @st.cache_resource # Cache the resource to avoid re-loading on every rerun
 def setup_rag_pipeline():
-    try:
-        # Load documents
-        # Ensure 'data/reference.pdf' exists in your project directory
-        loader = PyPDFLoader("data/reference.pdf")
-        documents = loader.load()
+    vectorstore_path = "./faiss_index" # Path to save/load FAISS index
 
-        # Split documents
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        chunks = text_splitter.split_documents(documents)
-
-        # Initialize embeddings
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
-        # Create/Load ChromaDB instance
-        # This will create/load a local ChromaDB instance in './chroma_db'
-        vectorstore = Chroma.from_documents(
-            chunks,
-            embeddings,
-            persist_directory="./chroma_db",
-            client_settings=Settings(
-                chroma_db_impl="duckdb+parquet",
-                persist_directory="./chroma_db"
-            )
-        )
-        vectorstore.persist() # Save the database to disk (important for persistence)
-        st.sidebar.success("RAG pipeline setup complete: Documents loaded and vectorized.") # Moved to sidebar
+    # Check if FAISS index already exists to avoid re-downloading/re-processing
+    if os.path.exists(vectorstore_path):
+        st.info("Loading existing FAISS index...")
+        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2") # Embeddings needed for loading
+        vectorstore = FAISS.load_local(vectorstore_path, embeddings, allow_dangerous_deserialization=True)
+        st.sidebar.success("RAG pipeline setup complete: FAISS index loaded.")
         return vectorstore, embeddings
-    except FileNotFoundError:
-        st.error("Error: 'data/reference.pdf' not found. Please ensure your Solo Leveling knowledge base PDF is in the 'data/' directory.")
-        st.stop()
-    except Exception as e:
-        st.error(f"Error setting up RAG pipeline: {e}")
-        st.stop()
+    else:
+        try:
+            # --- Solo Leveling PDF from Google Drive URL ---
+            # IMPORTANT: Replace 'YOUR_SOLO_LEVELING_PDF_FILE_ID' with your actual Google Drive File ID.
+            # Ensure the file is shared publicly or accessible via a link.
+            # Example: If your share link is https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ/view?usp=sharing
+            # Then the ID is 1aBcDeFgHiJkLmNoPqRsTuVwXyZ
+            solo_leveling_pdf_file_id = "YOUR_SOLO_LEVELING_PDF_FILE_ID" # <--- REPLACE THIS WITH YOUR FILE ID
+            file_url = f"https://drive.google.com/uc?export=download&id={solo_leveling_pdf_file_id}"
+
+            st.info(f"Attempting to download PDF from: {file_url}")
+            response = requests.get(file_url)
+            response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+
+            file_data = io.BytesIO(response.content)
+
+            # Use pypdf to read the PDF from bytes and extract text
+            pdf_reader = PdfReader(file_data)
+            raw_text = ''
+            for i, page in enumerate(pdf_reader.pages):
+                text = page.extract_text()
+                if text:
+                    raw_text += text + "\n"
+            
+            # Create a single LangChain Document object from the extracted text
+            documents = [Document(page_content=raw_text, metadata={"source": "Solo Leveling Manhwa"})]
+
+            # Split documents
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            chunks = text_splitter.split_documents(documents)
+            st.info(f"Split {len(chunks)} chunks from the PDF.")
+
+            # Initialize embeddings
+            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+            # Create FAISS index from documents
+            vectorstore = FAISS.from_documents(chunks, embeddings)
+            vectorstore.save_local(vectorstore_path) # Save the FAISS index to disk
+            st.sidebar.success("RAG pipeline setup complete: Documents loaded, vectorized, and FAISS index saved.")
+            return vectorstore, embeddings
+        except requests.exceptions.HTTPError as e:
+            st.error(f"HTTP Error downloading PDF: {e}. Please check the file ID and sharing settings.")
+            st.stop()
+        except requests.exceptions.ConnectionError as e:
+            st.error(f"Connection Error downloading PDF: {e}. Check your internet connection.")
+            st.stop()
+        except Exception as e:
+            st.error(f"Error setting up RAG pipeline: {e}")
+            st.stop()
 
 # Setup RAG pipeline once
 vectorstore, embeddings = setup_rag_pipeline()
@@ -132,10 +159,36 @@ st.markdown(
     .stChatMessage [data-testid="stChatMessageAvatar"] img {
         filter: grayscale(100%);
     }
-    /* Optional: Adjust user message alignment if needed, though Streamlit handles this */
-    /* .stChatMessage.st-emotion-cache-xyz-user-message {
-        align-self: flex-end;
-    } */
+
+    /* Adjust user message alignment to the right */
+    .stChatMessage[data-testid="stChatMessage"]:has([data-testid="stMarkdownContainer"]:not([data-testId="stUserChatMessage"])) {
+        display: flex;
+        justify-content: flex-end;
+    }
+    .stChatMessage[data-testid="stChatMessage"]:has([data-testid="stMarkdownContainer"]:not([data-testId="stUserChatMessage"])) [data-testid="stChatMessageContent"] {
+        background-color: #e0f7fa; /* Light blue background for user messages */
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .stChatMessage[data-testid="stChatMessage"]:has([data-testid="stMarkdownContainer"]:not([data-testId="stUserChatMessage"])) [data-testid="stChatMessageAvatar"] {
+        order: 2; /* Move avatar to the right of the message */
+        margin-left: 10px; /* Add space between message and avatar */
+    }
+
+    /* Adjust assistant message alignment to the left */
+    .stChatMessage[data-testid="stChatMessage"]:has([data-testId="stUserChatMessage"]) {
+        display: flex;
+        justify-content: flex-start;
+    }
+    .stChatMessage[data-testid="stChatMessage"]:has([data-testId="stUserChatMessage"]) [data-testid="stChatMessageContent"] {
+        background-color: #f0f0f0; /* Light gray background for assistant messages */
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .stChatMessage[data-testid="stChatMessage"]:has([data-testId="stUserChatMessage"]) [data-testid="stChatMessageAvatar"] {
+        order: 1; /* Keep avatar to the left of the message */
+        margin-right: 10px; /* Add space between message and avatar */
+    }
     </style>
     """,
     unsafe_allow_html=True

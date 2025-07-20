@@ -4,6 +4,6 @@ langchain-community
 groq
 sentence-transformers
 pypdf
-chromadb
 arize
-python-dotenv
+dotenv
+faiss-cpu
