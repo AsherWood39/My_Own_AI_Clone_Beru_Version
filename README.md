@@ -52,7 +52,7 @@
 ---
 
 ## 🔗 Live Demo
-Try it here: https://myownaicloneberuversion-eclqg6yzvrsrtfrkxtmbmn.streamlit.app/
+Try it here : [Demo URL](https://myownaicloneberuversion-eclqg6yzvrsrtfrkxtmbmn.streamlit.app/)
 
 ---
 
