@@ -118,7 +118,7 @@ def get_groq_response(prompt_text):
             messages=[
                 {"role": "user", "content": prompt_text},
             ],
-            model="llama3.2:1b",
+            model="llama3-8b-8192",
             temperature=0.7,
             max_tokens=64, # Further reduced max_tokens to encourage even shorter responses
         )
