@@ -1,4 +1,4 @@
-# 🕶️ Ant King — Beru Clone
+# 🕶️ Talk-to-Beru — Beru Clone
 *"At your command, My Liege. This unit holds the knowledge of great battles, the Sovereign's will, and the world beyond."* — Beru
 
 ---
