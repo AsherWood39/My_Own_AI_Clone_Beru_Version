@@ -134,7 +134,7 @@ st.set_page_config(
     layout="centered", # Can be "wide" or "centered"
     initial_sidebar_state="collapsed" # Makes sidebar collapsed by default
 )
-st.title("GenAI RAG Chatbot: Beru's Wisdom")
+st.title("GenAI RAG Chatbot: Talk-to-Beru")
 
 # Custom CSS for grayscale icons and potentially other styling
 st.markdown(
